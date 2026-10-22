@@ -7,12 +7,14 @@ import type { Category, Priority } from "../domain.js";
  * "Rules" in the admin UI so the team knows to double-check them.
  */
 
-const CATEGORY_KEYWORDS: Record<Exclude<Category, "GENERAL_INQUIRY">, RegExp[]> = {
+// Marketplace names alone ("...show on Amazon") aren't a distribution signal; availability words are.
+const CATEGORY_KEYWORDS: Record<Category, RegExp[]> = {
   ROYALTY_PAYMENTS: [/royalt/i, /payout/i, /payment/i, /\bpaid\b/i, /bank/i, /₹|\brs\.?\s?\d|\binr\b/i, /earning/i],
   ISBN_METADATA: [/isbn/i, /metadata/i, /wrong (title|author|book|price)/i, /description/i, /barcode/i],
   PRINTING_QUALITY: [/print/i, /blurr?y/i, /misalign/i, /binding/i, /defect/i, /quality/i, /pages? (are|is) (missing|torn)/i, /reprint/i],
-  DISTRIBUTION_AVAILABILITY: [/unavailable/i, /not (available|showing|listed|live)/i, /amazon/i, /flipkart/i, /listing/i, /out of stock/i],
+  DISTRIBUTION_AVAILABILITY: [/unavailable/i, /not (available|showing|listed|live)/i, /out of stock/i, /can'?t (buy|find|order)/i],
   BOOK_STATUS_PRODUCTION: [/typesett/i, /cover design/i, /proofread/i, /editing/i, /production/i, /when will .* (be )?(done|ready|published)/i, /status/i],
+  GENERAL_INQUIRY: [/\bbio\b/i, /package/i, /bestseller breakthrough/i, /\baccount\b/i, /how (do|can) i/i],
 };
 
 const CRITICAL_SIGNALS = [/\b([6-9]|1[0-2]|six|seven|eight|nine|ten|twelve)\s+months?\b/i, /legal|lawyer|court|consumer forum/i, /wrong account/i, /fraud|scam/i];
