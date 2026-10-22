@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "BookLeaf Author Support & Communication Portal",
   "workspaces": ["server", "web"],
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22" },
   "scripts": {
     "dev": "npm run dev -w server & npm run dev -w web",
     "build": "npm run build -w web && npm run build -w server",

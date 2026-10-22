@@ -9,7 +9,7 @@ import { logger } from "./lib/logger.js";
 
 async function main() {
   const { db, close } = await openDatabase(
-    env.DATABASE_URL ? { kind: "postgres", url: env.DATABASE_URL } : { kind: "pglite", dataDir: env.PGLITE_DATA_DIR },
+    env.DATABASE_URL ? { kind: "postgres", url: env.DATABASE_URL, poolMax: env.PG_POOL_MAX } : { kind: "pglite", dataDir: env.PGLITE_DATA_DIR },
   );
   logger.info("db.ready", { driver: env.DATABASE_URL ? "postgres" : "pglite" });
 

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle as drizzleNodePg, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -22,7 +23,7 @@ export interface DbHandle {
 const migrationsFolder = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../drizzle");
 
 export type DbTarget =
-  | { kind: "postgres"; url: string }
+  | { kind: "postgres"; url: string; poolMax?: number }
   /** dataDir undefined = in-memory (tests). */
   | { kind: "pglite"; dataDir?: string };
 
@@ -33,13 +34,15 @@ export async function openDatabase(target: DbTarget): Promise<DbHandle> {
       connectionString: target.url,
       // Managed Postgres providers (Render, Neon) require TLS.
       ssl: /localhost|127\.0\.0\.1/.test(target.url) ? undefined : { rejectUnauthorized: false },
-      max: 10,
+      max: target.poolMax ?? 10,
     });
     const db = drizzleNodePg(pool, { schema });
     await migrateNodePg(db, { migrationsFolder });
     return { db, close: () => pool.end() };
   }
 
+  // PGlite doesn't create parent directories itself.
+  if (target.dataDir) fs.mkdirSync(target.dataDir, { recursive: true });
   const client = new PGlite(target.dataDir);
   const db = drizzlePglite(client, { schema });
   await migratePglite(db, { migrationsFolder });

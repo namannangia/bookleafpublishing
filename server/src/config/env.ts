@@ -10,6 +10,7 @@ const EnvSchema = z.object({
 
   // When unset, an embedded Postgres (PGlite) is used so the project runs with zero setup.
   DATABASE_URL: z.string().url().optional(),
+  PG_POOL_MAX: z.coerce.number().int().positive().default(10),
   PGLITE_DATA_DIR: z.string().default(".data/pglite"),
 
   JWT_SECRET: z.string().min(16).default("dev-only-secret-change-me-in-prod"),

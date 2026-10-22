@@ -4,7 +4,7 @@ import type { Category } from "../domain.js";
  * BookLeaf's knowledge base, split by topic so each AI call only carries the
  * policy that's relevant to the ticket's category. The core (company overview
  * and tone) goes into every draft; one topic section goes in per ticket.
- * This keeps a draft prompt at roughly a third of the full knowledge base's size.
+ * A draft system prompt is ~800–950 tokens instead of ~1,850 with every section.
  */
 
 export const COMPANY_OVERVIEW = `\
