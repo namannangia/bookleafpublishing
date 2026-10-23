@@ -4,7 +4,7 @@ import { books, ticketEvents, tickets } from "../db/schema.js";
 import { logger } from "../lib/logger.js";
 import type { RealtimeHub } from "../modules/realtime/hub.js";
 import type { AiGateway } from "./ai-gateway.js";
-import { LlmError } from "./llm.js";
+import { LlmError, type Effort } from "./llm.js";
 import { CLASSIFY_SYSTEM, ClassificationSchema, buildClassifyUserMessage } from "./prompts/classify.js";
 import { classifyByRules } from "./rules-classifier.js";
 
@@ -23,7 +23,7 @@ export class TriageService {
     private readonly db: Db,
     private readonly ai: AiGateway,
     private readonly hub: RealtimeHub,
-    private readonly model: string,
+    private readonly settings: { model: string; effort: Effort },
   ) {}
 
   /** Fire-and-forget entry point used right after a ticket is created. */
@@ -66,12 +66,13 @@ export class TriageService {
     try {
       const { data } = await this.ai.run(ticketId, {
         purpose: "CLASSIFY",
-        model: this.model,
+        model: this.settings.model,
         system: [{ text: CLASSIFY_SYSTEM }],
         user: buildClassifyUserMessage({ subject: ticket.subject, description: ticket.description, bookLine }),
         schema: ClassificationSchema,
-        maxTokens: 1024,
-        effort: "low",
+        // Headroom for reasoning tokens when thinking is on; the answer itself is ~60 tokens.
+        maxTokens: this.settings.effort === "none" ? 512 : 4096,
+        effort: this.settings.effort,
       });
       result = { ...data, confidence: Math.min(1, Math.max(0, data.confidence)) };
       source = "AI";

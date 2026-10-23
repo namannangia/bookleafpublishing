@@ -4,7 +4,7 @@ import { aiDrafts, authors, books, ticketMessages, tickets, users, type AiDraft 
 import { notFound, serviceUnavailable } from "../lib/errors.js";
 import { buildAccountFacts } from "./account-facts.js";
 import type { AiGateway } from "./ai-gateway.js";
-import { LlmError } from "./llm.js";
+import { LlmError, type Effort } from "./llm.js";
 import { DraftSchema, buildDraftSystem, buildDraftUserMessage, type ThreadMessage } from "./prompts/draft.js";
 import type { TriageService } from "./triage-service.js";
 
@@ -27,7 +27,7 @@ export class DraftService {
     private readonly db: Db,
     private readonly ai: AiGateway,
     private readonly triage: TriageService,
-    private readonly model: string,
+    private readonly settings: { model: string; effort: Effort },
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -87,18 +87,19 @@ export class DraftService {
       authorName: authorRow?.name ?? "Author",
       allBooks: authorBooks,
       selectedBook,
+      category,
       today: this.now(),
     });
 
     try {
       const { data, model } = await this.ai.run(ticketId, {
         purpose: "DRAFT",
-        model: this.model,
+        model: this.settings.model,
         system: buildDraftSystem(category),
         user: buildDraftUserMessage({ accountFacts, subject: ticket.subject, description: ticket.description, thread }),
         schema: DraftSchema,
-        maxTokens: 4096,
-        effort: "medium",
+        maxTokens: 8192,
+        effort: this.settings.effort,
       });
       const [draft] = await this.db
         .insert(aiDrafts)

@@ -13,6 +13,12 @@ export interface SystemBlock {
   cacheBreakpoint?: boolean;
 }
 
+/**
+ * How much the model should reason before answering. "none" turns thinking off
+ * where the provider allows it (cheapest and fastest; fine for classification).
+ */
+export type Effort = "none" | "low" | "medium" | "high";
+
 export interface StructuredRequest<T> {
   purpose: AiPurpose;
   model: string;
@@ -20,7 +26,7 @@ export interface StructuredRequest<T> {
   user: string;
   schema: z.ZodType<T>;
   maxTokens: number;
-  effort: "low" | "medium" | "high";
+  effort: Effort;
 }
 
 export interface LlmUsage {
@@ -47,6 +53,7 @@ export type LlmErrorCode =
   | "TIMEOUT"
   | "UNAVAILABLE"
   | "AUTH"
+  | "QUOTA"
   | "BAD_REQUEST"
   | "REFUSED"
   | "INVALID_OUTPUT";

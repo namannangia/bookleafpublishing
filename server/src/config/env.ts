@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * All runtime configuration comes from environment variables and is validated
- * once at boot. Secrets (JWT secret, Anthropic key) never leave the server.
+ * once at boot. Secrets (JWT secret, AI provider keys) never leave the server.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -16,11 +16,18 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(16).default("dev-only-secret-change-me-in-prod"),
   JWT_TTL_HOURS: z.coerce.number().int().positive().default(12),
 
-  // AI. If ANTHROPIC_API_KEY is missing the app still works: tickets get rule-based
-  // triage and admins write responses manually.
+  // AI. With no provider key the app still works: tickets get rule-based triage
+  // and admins write responses manually.
+  // AI_PROVIDER defaults to whichever key is present (DeepSeek first).
+  AI_PROVIDER: z.enum(["deepseek", "anthropic", "none"]).optional(),
+  DEEPSEEK_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
-  AI_CLASSIFY_MODEL: z.string().default("claude-haiku-5-5"),
-  AI_DRAFT_MODEL: z.string().default("claude-haiku-5-5"),
+  // Defaults depend on the provider (see ai/provider.ts).
+  AI_CLASSIFY_MODEL: z.string().optional(),
+  AI_DRAFT_MODEL: z.string().optional(),
+  // "none" disables thinking. Triage is a simple classification, so it skips reasoning by default.
+  AI_CLASSIFY_EFFORT: z.enum(["none", "low", "medium", "high"]).default("none"),
+  AI_DRAFT_EFFORT: z.enum(["none", "low", "medium", "high"]).default("low"),
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
   AI_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
 

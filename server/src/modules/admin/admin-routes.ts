@@ -5,11 +5,15 @@ import { aiCalls, ticketEvents, ticketMessages, tickets, users } from "../../db/
 import { SLA_HOURS, UNRESOLVED_STATUSES } from "../../domain.js";
 import { handler } from "../../lib/http.js";
 
-/** USD per million tokens. Used only for the cost estimate in the admin UI. */
-const PRICING: Record<string, { input: number; output: number }> = {
-  "claude-haiku-5-5": { input: 0.1, output: 0.5 },
-  "claude-sonnet-5-5": { input: 2, output: 10 },
-  "claude-opus-5-5": { input: 4, output: 20 },
+/**
+ * USD per million tokens, for the cost estimate in the admin UI. DeepSeek rows use
+ * peak-hour rates (off-peak is half), so the estimate errs high.
+ */
+const PRICING: Record<string, { input: number; cacheRead: number; cacheWrite: number; output: number }> = {
+  "deepseek-flash": { input: 0.3, cacheRead: 0.006, cacheWrite: 0.3, output: 1.2 },
+  "deepseek-v4-pro": { input: 1.32, cacheRead: 0.044, cacheWrite: 1.32, output: 3.96 },
+  "claude-haiku-5-5": { input: 0.1, cacheRead: 0.01, cacheWrite: 0.125, output: 0.5 },
+  "claude-sonnet-5-5": { input: 2, cacheRead: 0.2, cacheWrite: 2.5, output: 10 },
 };
 
 export function adminRoutes(deps: { db: Db; aiStatus: () => "ok" | "degraded" | "disabled" }) {
@@ -72,9 +76,12 @@ export function adminRoutes(deps: { db: Db; aiStatus: () => "ok" | "degraded" | 
       for (const r of callRows) {
         const price = PRICING[r.model];
         if (!price) continue;
-        // Cache reads bill at 0.1x input, cache writes at 1.25x.
         estimatedCostUsd +=
-          ((r.inputTokens + r.cacheReadTokens * 0.1 + r.cacheWriteTokens * 1.25) * price.input + r.outputTokens * price.output) / 1e6;
+          (r.inputTokens * price.input +
+            r.cacheReadTokens * price.cacheRead +
+            r.cacheWriteTokens * price.cacheWrite +
+            r.outputTokens * price.output) /
+          1e6;
       }
       const sum = (pick: (r: (typeof callRows)[number]) => number, filter = (_: (typeof callRows)[number]) => true) =>
         callRows.filter(filter).reduce((s, r) => s + pick(r), 0);

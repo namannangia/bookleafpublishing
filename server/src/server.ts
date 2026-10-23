@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AnthropicLlmClient } from "./ai/anthropic-client.js";
+import { setupAi } from "./ai/provider.js";
 import { buildServices, createApp, type AppConfig } from "./app.js";
 import { env } from "./config/env.js";
 import { openDatabase } from "./db/client.js";
@@ -15,21 +15,22 @@ async function main() {
 
   if (env.SEED_ON_BOOT && (await seedIfEmpty(db))) logger.info("db.seeded");
 
-  const llm = env.ANTHROPIC_API_KEY
-    ? new AnthropicLlmClient({ apiKey: env.ANTHROPIC_API_KEY, timeoutMs: env.AI_TIMEOUT_MS, maxRetries: env.AI_MAX_RETRIES })
-    : null;
-  if (!llm) logger.warn("ai.disabled", { reason: "ANTHROPIC_API_KEY not set; using rule-based triage and manual replies" });
+  const ai = setupAi(env);
+  if (ai.client) logger.info("ai.enabled", { provider: ai.provider, classifyModel: ai.classifyModel, draftModel: ai.draftModel });
+  else logger.warn("ai.disabled", { reason: "No AI provider key set; using rule-based triage and manual replies" });
 
   const config: AppConfig = {
     jwtSecret: env.JWT_SECRET,
     jwtTtlHours: env.JWT_TTL_HOURS,
     secureCookies: env.NODE_ENV === "production",
-    classifyModel: env.AI_CLASSIFY_MODEL,
-    draftModel: env.AI_DRAFT_MODEL,
+    classifyModel: ai.classifyModel,
+    draftModel: ai.draftModel,
+    classifyEffort: env.AI_CLASSIFY_EFFORT,
+    draftEffort: env.AI_DRAFT_EFFORT,
     maxUploadBytes: env.MAX_UPLOAD_BYTES,
     staticDir: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist"),
   };
-  const services = buildServices(db, llm, config);
+  const services = buildServices(db, ai.client, config);
   const app = createApp(db, services, config);
 
   const server = app.listen(env.PORT, () => logger.info("http.listening", { port: env.PORT }));

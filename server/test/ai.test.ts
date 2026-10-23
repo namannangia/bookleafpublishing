@@ -46,7 +46,7 @@ describe("AI triage", () => {
     const req = llm.requests.filter((r) => r.purpose === "CLASSIFY").at(-1)!;
     expect(req.user).toContain("<ticket>");
     expect(req.system.map((s) => s.text).join()).not.toContain("80/20 royalty split");
-    expect(req.effort).toBe("low");
+    expect(req.effort).toBe("none");
   });
 
   it("still creates and triages the ticket by rules when the AI is down", async () => {

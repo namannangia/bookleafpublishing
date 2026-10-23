@@ -6,7 +6,7 @@ import helmet from "helmet";
 import { MulterError } from "multer";
 import { AiGateway } from "./ai/ai-gateway.js";
 import { DraftService } from "./ai/draft-service.js";
-import type { LlmClient } from "./ai/llm.js";
+import type { Effort, LlmClient } from "./ai/llm.js";
 import { TriageService } from "./ai/triage-service.js";
 import type { Db } from "./db/client.js";
 import { AppError } from "./lib/errors.js";
@@ -26,6 +26,8 @@ export interface AppConfig {
   secureCookies: boolean;
   classifyModel: string;
   draftModel: string;
+  classifyEffort?: Effort;
+  draftEffort?: Effort;
   maxUploadBytes: number;
   /** Built SPA to serve in production; omitted in dev/tests. */
   staticDir?: string;
@@ -36,8 +38,8 @@ export interface AppConfig {
 export function buildServices(db: Db, llm: LlmClient | null, config: AppConfig) {
   const hub = new RealtimeHub();
   const ai = new AiGateway(db, llm);
-  const triage = new TriageService(db, ai, hub, config.classifyModel);
-  const drafts = new DraftService(db, ai, triage, config.draftModel, config.now);
+  const triage = new TriageService(db, ai, hub, { model: config.classifyModel, effort: config.classifyEffort ?? "none" });
+  const drafts = new DraftService(db, ai, triage, { model: config.draftModel, effort: config.draftEffort ?? "low" }, config.now);
   const tickets = new TicketService(db, hub, triage, drafts, () => ai.status());
   return { hub, ai, triage, drafts, tickets };
 }

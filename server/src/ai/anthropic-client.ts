@@ -32,7 +32,8 @@ export class AnthropicLlmClient implements LlmClient {
         max_tokens: req.maxTokens,
         system,
         messages: [{ role: "user", content: req.user }],
-        output_config: { effort: req.effort, format: zodOutputFormat(req.schema) },
+        // Claude has no "off" level here; low effort is the closest equivalent.
+        output_config: { effort: req.effort === "none" ? "low" : req.effort, format: zodOutputFormat(req.schema) },
       });
     } catch (err) {
       throw toLlmError(err);

@@ -3,7 +3,7 @@
 A support desk for BookLeaf Publishing with two faces:
 
 - **Author portal**: authors see their books and royalties, raise tickets (with attachments), and follow replies live.
-- **Admin desk**: the ops team works an urgency-ordered queue. Claude classifies and prioritises every new ticket and drafts replies grounded in BookLeaf's knowledge base and the author's actual account data.
+- **Admin desk**: the ops team works an urgency-ordered queue. An LLM (DeepSeek by default) classifies and prioritises every new ticket and drafts replies grounded in BookLeaf's knowledge base and the author's actual account data.
 
 **Live demo:** _URL to be added after deployment_ · **Write-up:** [WRITEUP.md](WRITEUP.md)
 
@@ -13,7 +13,7 @@ A support desk for BookLeaf Publishing with two faces:
 | **Author: books & royalties** | **Author: book in production** |
 | ![Books](docs/screenshots/author-books.png) | ![Production](docs/screenshots/author-book-in-production.png) |
 
-<sub>The draft screenshot was taken with a scripted model response so it's reproducible without an API key; real drafts vary.</sub>
+<sub>Screenshots show real DeepSeek Flash output on the seeded data: triage labels, confidence, and the draft with its action checklist.</sub>
 
 ## Test credentials
 
@@ -39,12 +39,12 @@ Requires Node 22+. No database or API key is needed to start.
 
 ```bash
 npm install
-cp .env.example .env      # optional: add ANTHROPIC_API_KEY to enable AI
+cp .env.example .env      # optional: add DEEPSEEK_API_KEY to enable AI
 npm run dev               # API on :4000, web on http://localhost:5173
 ```
 
 - **Database:** with no `DATABASE_URL`, the server runs an embedded Postgres (PGlite) in `server/.data/`. Set `DATABASE_URL` to use a real Postgres. Migrations run automatically on boot, and demo data is seeded if the database is empty.
-- **AI:** with no `ANTHROPIC_API_KEY`, the app runs in manual mode. Tickets are triaged by keyword rules and admins write replies themselves. Everything else works.
+- **AI:** with no `DEEPSEEK_API_KEY` (or `ANTHROPIC_API_KEY`), the app runs in manual mode. Tickets are triaged by keyword rules and admins write replies themselves. Everything else works.
 - **Reset data:** `npm run db:seed -- --reset`
 - **Tests:** `npm test` (44 tests: API, role-based access, AI pipeline, fallbacks, royalty date logic)
 - **Production build:** `npm run build && npm start` serves the API and the built SPA from one process on `:4000`.
@@ -58,13 +58,13 @@ React SPA (Vite, TanStack Query)
 Express API ── auth/RBAC middleware ── routes ─► services ──► Drizzle ──► Postgres
                                                     │
                                                     ├─ TriageService ─┐
-                                                    └─ DraftService ──┴─► AiGateway ─► LlmClient (Claude)
+                                                    └─ DraftService ──┴─► AiGateway ─► LlmClient (DeepSeek | Claude)
                                                                           (circuit breaker, usage ledger)
 ```
 
 ```
 server/src
-  ai/            LLM interface + Claude client, gateway, triage, drafting, prompts, knowledge base, account facts, rule fallback
+  ai/            LLM interface + DeepSeek/Claude clients, gateway, triage, drafting, prompts, knowledge base, account facts, rule fallback
   modules/       auth, books, tickets (schemas → routes → service → presenter), admin stats, realtime hub
   db/            schema, migrations runner, seed
   middleware/ lib/ config/
@@ -92,7 +92,7 @@ web/src
 ### Pipeline
 
 1. **Ticket created.** It is saved and the author gets a response immediately. Triage then runs asynchronously, so the AI never blocks or fails ticket creation.
-2. **Triage** (`ai/triage-service.ts`). One small Claude call returns `{category, priority, confidence, rationale}` via structured outputs. If an admin has already overridden a field, that value is never overwritten. On boot, any ticket left untriaged (by a crash or a fresh seed) is picked up again.
+2. **Triage** (`ai/triage-service.ts`). One small LLM call with thinking turned off returns `{category, priority, confidence, rationale}` as JSON, validated against a Zod schema. If an admin has already overridden a field, that value is never overwritten. On boot, any ticket left untriaged (by a crash or a fresh seed) is picked up again.
 3. **Admin opens the ticket.** A draft is generated, or a cached one is reused. The admin edits and sends it, or discards it and writes their own.
 4. **Draft output** (`ai/draft-service.ts`) is structured:
    - `reply`: the message itself.
@@ -114,7 +114,8 @@ web/src
 | No API key | Manual mode: rule-based triage (marked **RULES** in the UI), no drafts, and a banner explains why. |
 | Timeout, 429 or 5xx | The SDK retries with backoff (`AI_MAX_RETRIES`, 20 s timeout). If it still fails, triage falls back to rules, and the draft endpoint returns `503 AI_UNAVAILABLE`, which the composer shows next to a Retry button while the admin keeps typing. |
 | Repeated failures | A circuit breaker in `AiGateway` pauses AI calls for 60 s after 3 consecutive transient errors, so requests fail fast instead of stacking up timeouts. The UI shows "AI degraded". |
-| Refusal, truncated or invalid output | Typed `LlmError` (`REFUSED`/`INVALID_OUTPUT`) with the same fallback path. Structured outputs make malformed JSON effectively impossible. |
+| Refusal, truncated or invalid output | DeepSeek's JSON mode isn't schema-enforced (and occasionally returns empty content), so every response is validated against the Zod schema and retried once. If it's still unusable: typed `LlmError` (`REFUSED`/`INVALID_OUTPUT`), same fallback path. |
+| Out of credit | DeepSeek's 402 maps to `QUOTA`: triage falls back to rules, drafts show the manual-reply message. |
 | Rules-triaged tickets | An admin can click **Re-run AI triage** once the AI is back. |
 
 ### Cost management
@@ -122,17 +123,28 @@ web/src
 - **Lazy drafts.** Drafts are generated only when an admin opens a ticket, never for every incoming ticket.
 - **Cached drafts.** A draft is stored and reused until the conversation changes (tracked by message count), so reopening a ticket or another admin viewing it costs nothing. Concurrent requests for the same ticket share one call.
 - **Scoped context.** A draft system prompt is about 800–950 tokens, against about 1,850 if the whole knowledge base went in. Only the relevant book's facts are included, the thread is trimmed to the last 6 messages with each message capped, and long tickets are truncated. Classification is about 600 input tokens.
-- **Prompt caching.** The system prompt is ordered stable→specific (core, then category section) with a cache breakpoint after the category section. During busy periods, tickets in the same category share a cached prefix (Haiku 5.5's minimum cacheable prefix is 512 tokens; the draft prefix clears it).
-- **Right-sized effort.** Classification runs at `effort: low` with a 1K `max_tokens` cap; drafting runs at `medium`.
-- **Measured, not guessed.** Every call is written to `ai_calls` (tokens, cache reads, latency, outcome). The **AI Insights** page shows spend, failure rate and quality signals: the triage override rate, the share of replies sent from drafts, and the share of drafts sent unedited. Rough cost: under a tenth of a cent per ticket on Haiku 5.5 (input ~$0.10/M, output ~$0.50/M); the Insights page has the real figure.
+- **Prompt caching.** The system prompt is ordered stable→specific (core, then category section), so tickets in the same category share a prefix. DeepSeek caches repeated prefixes automatically and bills cache hits at about 2% of the normal input price. In testing, the second classification already read 512 of its ~730 input tokens from cache. (With Claude, the same ordering plus a `cache_control` breakpoint does the job.)
+- **Right-sized reasoning.** Classification runs with thinking **off** (`AI_CLASSIFY_EFFORT=none`): it's a rubric lookup, and turning thinking off cuts it to ~1 s and ~50 output tokens. Drafting uses `low` reasoning effort (`AI_DRAFT_EFFORT`). Both are tunable without code changes.
+- **Measured, not guessed.** Every call is written to `ai_calls` (tokens, cache reads, latency, outcome). The **AI Insights** page shows spend, failure rate and quality signals: the triage override rate, the share of replies sent from drafts, and the share of drafts sent unedited. Measured on DeepSeek Flash at peak-hour prices: triage ≈ $0.0001–0.0003 and a draft ≈ $0.0008–0.0018, so about **$1–2 per 1,000 tickets** (half that off-peak). The Insights page has the live figure.
 
 ### Model choice
 
-Claude Haiku 5.5 (`claude-haiku-5-5`) for both tasks, configurable through `AI_CLASSIFY_MODEL` / `AI_DRAFT_MODEL`. Triage is a high-volume, latency-sensitive classification task that a small model handles well. Drafts are short and heavily grounded (policy and facts are supplied), so a small model at medium effort writes them well at a fraction of the cost. If draft quality ever falls short, `AI_DRAFT_MODEL=claude-sonnet-5-5` upgrades drafting alone. Claude's structured outputs (schema-guaranteed JSON) and prompt caching were the deciding API features. Everything goes through a provider-neutral `LlmClient` interface (`ai/llm.ts`).
+**DeepSeek Flash (`deepseek-flash`, V4.1-Flash) for both triage and drafts**, set by `AI_CLASSIFY_MODEL` / `AI_DRAFT_MODEL`. I compared it with `deepseek-v4-pro` by running the same seeded tickets (overdue royalty, ISBN mismatch, production delay) through the app's real triage and draft services:
+
+| | Flash | V4-Pro |
+|---|---|---|
+| Triage (thinking off) | 3/3 correct, ~1.1 s | 3/3 correct (same labels), ~1.6 s |
+| Drafts (low effort) | Followed the tone rules and sign-off every time; quoted real figures | One draft dropped the sign-off and paragraphing; vaguer ("Rest assured…") |
+| Draft latency | 4–7 s | 7.5–10 s |
+| Price per 1M tokens (peak; off-peak is half) | $0.30 in · $0.006 cached · $1.20 out | $1.32 in · $0.044 cached · $3.96 out |
+
+V4-Pro is the stronger model on hard reasoning and knowledge benchmarks, but this task doesn't need that: the policy and the facts are supplied, and the job is following instructions and writing in BookLeaf's voice. Flash did that as well or better, at roughly a third of the cost and latency. Three tickets is only a spot check, which is why the live override and unedited-draft rates exist. If drafts ever fall short, `AI_DRAFT_MODEL=deepseek-v4-pro` upgrades drafting alone.
+
+Everything goes through a provider-neutral `LlmClient` interface (`ai/llm.ts`). A Claude implementation also exists (`AI_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`), which shows that the provider really is swappable.
 
 ### API key security
 
-The key is read only from the server's environment (`config/env.ts`, validated at boot). It never reaches the browser, the repo or the logs; `.env` is git-ignored. The frontend has no AI calls of its own; it only talks to `/api`.
+Provider keys are read only from the server's environment (`config/env.ts`, validated at boot). It never reaches the browser, the repo or the logs; `.env` is git-ignored. The frontend has no AI calls of its own; it only talks to `/api`.
 
 ## API reference
 

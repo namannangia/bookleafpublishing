@@ -7,7 +7,7 @@
 3. **Measure it.** Every AI call is logged with tokens and latency, and the admin side shows spend alongside quality proxies: how often admins override triage, and how often drafts go out unedited. That's how you'd know whether a prompt or model change helped.
 
 **Trade-offs I made.**
-- *Haiku over a larger model.* Classification is high-volume, and drafts are short and well grounded. A small model at the right effort level does both well for a fraction of a cent per ticket, and drafting can be upgraded on its own with one environment variable.
+- *DeepSeek Flash over V4-Pro.* I ran the same tickets through both. Triage was identical, and Flash's drafts followed BookLeaf's tone rules more consistently at about a third of the cost and latency. The policy and facts are supplied, so the task rewards instruction-following, not raw reasoning power. Drafting can be moved to V4-Pro with one environment variable if quality ever slips. Triage also runs with thinking turned off, since it's a rubric lookup.
 - *Category routing over vector search.* The knowledge base is six sections, so routing by the triaged category is cheaper, deterministic and easy to debug. Retrieval earns its complexity once the knowledge base is much larger.
 - *Lazy, cached drafts over pre-generating for every ticket.* Tokens are only spent on tickets someone opens, and a draft is reused until the conversation changes.
 - *Simple infrastructure.* One deployable, in-process SSE and in-process background triage, plus embedded Postgres for zero-setup local runs. This is right for a demo and a small team; it's the first thing to change at scale (below).

@@ -97,6 +97,7 @@ function Composer({ ticket }: { ticket: AdminTicketDetail }) {
     onSuccess: (draft) => {
       applyDraft(draft);
       void qc.invalidateQueries({ queryKey: ["ticket", ticket.id] });
+      void qc.invalidateQueries({ queryKey: ["stats"] }); // usage/cost changed
     },
   });
 

@@ -1,5 +1,5 @@
 # Render Blueprint: one web service (Docker) + a managed Postgres.
-# Deploy: Render dashboard → New → Blueprint → pick this repo, then set ANTHROPIC_API_KEY.
+# Deploy: Render dashboard → New → Blueprint → pick this repo, then set DEEPSEEK_API_KEY.
 services:
   - type: web
     name: bookleaf-author-support
@@ -13,8 +13,10 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      - key: ANTHROPIC_API_KEY
+      - key: DEEPSEEK_API_KEY
         sync: false
+      - key: AI_PROVIDER
+        value: deepseek
       - key: SEED_ON_BOOT
         value: "true"
 databases:

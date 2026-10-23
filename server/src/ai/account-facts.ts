@@ -1,4 +1,5 @@
 import type { Book } from "../db/schema.js";
+import type { Category } from "../domain.js";
 import { PRODUCTION_STAGES } from "./knowledge-base.js";
 
 /**
@@ -94,8 +95,11 @@ function describeProductionStage(status: string): string | null {
   return `Currently in production at the "${stage}" stage. Remaining stages: ${remaining}.`;
 }
 
-/** One compact line per book. Only the selected book is included when the ticket names one. */
-export function describeBook(b: Book): string {
+/**
+ * One compact line per book. Sales and royalty figures are only included when
+ * relevant, because models tend to bring up any number they're given.
+ */
+export function describeBook(b: Book, opts: { includeRoyalty: boolean } = { includeRoyalty: true }): string {
   const lines = [`"${b.title}" (ISBN ${b.isbn}, ${b.genre}). Status: ${b.status}.`];
   const production = describeProductionStage(b.status);
   if (production) {
@@ -103,13 +107,13 @@ export function describeBook(b: Book): string {
     return lines.join(" ");
   }
   if (b.publicationDate) lines.push(`Published ${formatDate(new Date(b.publicationDate))}.`);
-  if (b.mrp !== null) lines.push(`MRP ${inr(b.mrp)}; author royalty ${inr(b.royaltyPerCopy ?? 0)} per copy.`);
-  lines.push(
-    `${b.copiesSold} copies sold. Royalty earned ${inr(b.royaltyEarned)}, paid ${inr(b.royaltyPaid)}, pending ${inr(b.royaltyPending)}.`,
-  );
-  lines.push(
-    b.lastPayoutDate ? `Last payout: ${formatDate(new Date(b.lastPayoutDate))}.` : "No payout has been made for this book yet.",
-  );
+  if (b.mrp !== null) lines.push(`MRP ${inr(b.mrp)}.`);
+  if (opts.includeRoyalty) {
+    lines.push(
+      `Author royalty ${inr(b.royaltyPerCopy ?? 0)} per copy. ${b.copiesSold} copies sold. Royalty earned ${inr(b.royaltyEarned)}, paid ${inr(b.royaltyPaid)}, pending ${inr(b.royaltyPending)}.`,
+      b.lastPayoutDate ? `Last payout: ${formatDate(new Date(b.lastPayoutDate))}.` : "No payout has been made for this book yet.",
+    );
+  }
   if (b.printPartner) lines.push(`Printed by: ${b.printPartner}.`);
   lines.push(`Available on: ${b.availableOn.length ? b.availableOn.join(", ") : "not listed on any platform yet"}.`);
   return lines.join(" ");
@@ -117,26 +121,33 @@ export function describeBook(b: Book): string {
 
 /**
  * The fact sheet handed to the drafting model. `selectedBook` is null for
- * account-level queries, in which case every book gets a line.
+ * account-level queries, in which case every book gets a line. Royalty facts
+ * are only included for royalty and general tickets, so an ISBN or printing
+ * reply stays on topic.
  */
 export function buildAccountFacts(opts: {
   authorName: string;
   allBooks: Book[];
   selectedBook: Book | null;
+  category: Category;
   today: Date;
 }): string {
   const { allBooks, selectedBook, today } = opts;
+  const includeRoyalty = opts.category === "ROYALTY_PAYMENTS" || opts.category === "GENERAL_INQUIRY";
   const cal = payoutCalendar(today);
   const royalty = assessRoyalties(allBooks, today);
 
   const lines = [
     `Today's date: ${formatDate(today)}.`,
     `Author: ${opts.authorName}.`,
-    selectedBook ? `Book in question: ${describeBook(selectedBook)}` : "Query is account-level (no specific book selected).",
+    selectedBook
+      ? `Book in question: ${describeBook(selectedBook, { includeRoyalty })}`
+      : "Query is account-level (no specific book selected).",
   ];
   if (!selectedBook) {
-    for (const b of allBooks) lines.push(`- ${describeBook(b)}`);
+    for (const b of allBooks) lines.push(`- ${describeBook(b, { includeRoyalty })}`);
   }
+  if (!includeRoyalty) return lines.join("\n");
   lines.push(
     `Account-wide pending royalty: ${inr(royalty.pendingTotal)}.`,
     `Next scheduled payout: by ${formatDate(cal.nextPayoutBy)} (covers sales up to the quarter ending ${formatDate(cal.nextPayoutCoversQuarterEnding)}).`,

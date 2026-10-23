@@ -60,11 +60,22 @@ describe("royalty assessment", () => {
       authorName: "Kavita",
       allBooks: [],
       selectedBook: book({ status: "In Production - Typesetting", mrp: null, publicationDate: null, royaltyPending: 0 }),
+      category: "BOOK_STATUS_PRODUCTION",
       today,
     });
     expect(facts).toContain('"Typesetting" stage');
     expect(facts).toContain("Remaining stages: Proofreading → ISBN Assignment");
     expect(facts).not.toContain("MRP");
+  });
+
+  it("keeps royalty figures out of non-royalty tickets", () => {
+    const args = { authorName: "Rohit", allBooks: [book({ royaltyPending: 5280, lastPayoutDate: "2025-09-01" })], today };
+    const isbn = buildAccountFacts({ ...args, selectedBook: args.allBooks[0]!, category: "ISBN_METADATA" });
+    expect(isbn).toContain("ISBN 978-0");
+    expect(isbn).not.toMatch(/royalty|payout|pending/i);
+    const royalty = buildAccountFacts({ ...args, selectedBook: args.allBooks[0]!, category: "ROYALTY_PAYMENTS" });
+    expect(royalty).toContain("pending ₹5,280");
+    expect(royalty).toContain("may be overdue");
   });
 });
 
