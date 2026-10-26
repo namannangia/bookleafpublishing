@@ -11,7 +11,7 @@
     "start": "npm run start -w server",
     "test": "npm test -w server",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
-    "db:seed": "npm run db:seed -w server",
+    "db:seed": "npm run db:seed -w server --",
     "db:generate": "npm run db:generate -w server"
   }
 }
