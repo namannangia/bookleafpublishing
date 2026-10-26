@@ -5,7 +5,7 @@ A support desk for BookLeaf Publishing with two faces:
 - **Author portal**: authors see their books and royalties, raise tickets (with attachments), and follow replies live.
 - **Admin desk**: the ops team works an urgency-ordered queue. An LLM (DeepSeek by default) classifies and prioritises every new ticket and drafts replies grounded in BookLeaf's knowledge base and the author's actual account data.
 
-**Live demo:** _URL to be added after deployment_ · **Write-up:** [WRITEUP.md](WRITEUP.md)
+**Live demo:** https://bookleaf-author-support-98ub.onrender.com (free tier: the first request after idle takes ~50 s to wake) · **Write-up:** [WRITEUP.md](WRITEUP.md)
 
 | Admin queue | AI-drafted reply |
 |---|---|
