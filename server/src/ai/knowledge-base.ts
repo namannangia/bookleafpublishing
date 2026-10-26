@@ -39,7 +39,7 @@ const ROYALTY: KnowledgeSection = {
     {
       query: "I published my book 4 months ago and still haven't received any royalty. What's going on?",
       guidance:
-        "Acknowledge the frustration. Explain the quarterly cycle and 45-day payout window. Ask them to confirm their bank details are linked. Give the specific next payout date. If the payment is genuinely overdue, escalate with a 48-hour resolution timeline.",
+        "Acknowledge the frustration. Always explain the cycle in one sentence (royalties are calculated quarterly and paid within 45 days of the quarter ending), even if they may be overdue, so they can see when money should arrive. Ask them to confirm their bank details are linked. Give the specific next payout date. If the payment is genuinely overdue, escalate with a 48-hour resolution timeline.",
     },
     {
       query: "My royalty amount seems too low. I sold 200 copies but only received ₹3,000.",
