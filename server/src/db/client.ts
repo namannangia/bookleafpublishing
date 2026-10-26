@@ -35,6 +35,10 @@ export async function openDatabase(target: DbTarget): Promise<DbHandle> {
       // Managed Postgres providers (Render, Neon) require TLS.
       ssl: /localhost|127\.0\.0\.1/.test(target.url) ? undefined : { rejectUnauthorized: false },
       max: target.poolMax ?? 10,
+      // Fail fast instead of hanging a request on a dropped connection.
+      connectionTimeoutMillis: 10_000,
+      query_timeout: 15_000,
+      keepAlive: true,
     });
     const db = drizzleNodePg(pool, { schema });
     await migrateNodePg(db, { migrationsFolder });

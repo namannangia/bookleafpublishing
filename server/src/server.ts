@@ -34,6 +34,10 @@ async function main() {
   const app = createApp(db, services, config);
 
   const server = app.listen(env.PORT, () => logger.info("http.listening", { port: env.PORT }));
+  // Keep idle sockets open longer than the hosting proxy does. With Node's 5 s default the
+  // proxy reuses connections we've already closed and those requests are never answered.
+  server.keepAliveTimeout = 120_000;
+  server.headersTimeout = 121_000;
 
   // Classify anything left untriaged (fresh seed, or a crash mid-triage).
   services.triage
